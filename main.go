@@ -102,19 +102,15 @@ func POSTHandler(res http.ResponseWriter, req *http.Request) {
 				resp["message"] = "Duplicate color code"
 			}
 			jsonResp, _ := json.Marshal(resp)
+			res.WriteHeader(http.StatusBadRequest)
 			res.Write(jsonResp)
+		} else {
+			res.WriteHeader(http.StatusBadRequest)
 		}
-		res.WriteHeader(http.StatusBadRequest)
-
-	} else {
-		// TODO verify if this is needed
-		res.Header().Set("Content-Type", "application/json")
-		resp := make(map[string]string)
-		resp["message"] = "Color added"
-		jsonResp, _ := json.Marshal(res)
-		res.Write(jsonResp)
-		res.WriteHeader(http.StatusOK)
+		return
 	}
+
+	res.WriteHeader(http.StatusOK)
 	defer db.Close()
 }
 
