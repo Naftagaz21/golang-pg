@@ -43,10 +43,14 @@ func OpenConnection() *sql.DB {
 }
 
 func EnableCors(res *http.ResponseWriter) {
-	//(*res).Header().Set("Access-Control-Allow-Origin", "*")
+	(*res).Header().Set("Access-Control-Allow-Origin", "*")
 	//(*res).Header().Set("Content-Type", "text/html; charset=utf-8")
+	(*res).Header().Set("Access-Control-Allow-Methods", "POST, GET, DELETE")
 	//(*res).Header().Set("Access-Control-Allow-Origin", "*")
 	(*res).Header().Set("Access-Control-Allow-Headers", "Access-Control-Allow-Headers, Origin,Accept, X-Requested-With, Content-Type, Access-Control-Request-Method, Access-Control-Request-Headers")
+	//(*res).Header().Add("Access-Control-Allow-Origin", "*")
+	//(*res).Header().Add("Access-Control-Allow-Methods", "DELETE, POST, GET, OPTIONS")
+	//(*res).Header().Add("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
 }
 
 func GETHandler(res http.ResponseWriter, req *http.Request) {
@@ -91,7 +95,6 @@ func POSTHandler(res http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		if strings.HasPrefix(err.Error(), `pq: duplicate key`) {
 			res.Header().Set("Content-Type", "application/json")
-			res.WriteHeader(http.StatusBadRequest)
 			resp := make(map[string]string)
 			if strings.HasSuffix(err.Error(), `"unique_title"`) {
 				resp["message"] = "Duplicate color name"
@@ -100,18 +103,52 @@ func POSTHandler(res http.ResponseWriter, req *http.Request) {
 			}
 			jsonResp, _ := json.Marshal(resp)
 			res.Write(jsonResp)
-		} else {
-			res.WriteHeader(http.StatusBadRequest)
 		}
+		res.WriteHeader(http.StatusBadRequest)
+
+	} else {
+		// TODO verify if this is needed
+		res.Header().Set("Content-Type", "application/json")
+		resp := make(map[string]string)
+		resp["message"] = "Color added"
+		jsonResp, _ := json.Marshal(res)
+		res.Write(jsonResp)
+		res.WriteHeader(http.StatusOK)
+	}
+	defer db.Close()
+}
+
+// Used a post method instead of delete since I'd have to use mux or sth
+// else to handle argument passing via URL
+func POSTRemoveHandler(res http.ResponseWriter, req *http.Request) {
+	EnableCors(&res)
+
+	db := OpenConnection()
+
+	type colorId struct {
+		Id int64 `json:"id"`
+	}
+	var id colorId
+	err := json.NewDecoder(req.Body).Decode(&id)
+	if err != nil {
+		log.Println("delete id coult not be parsed from input")
 		panic(err)
 	}
 
-	res.WriteHeader(http.StatusOK)
+	insertQuery := `DELETE FROM colors WHERE id=$1`
+	_, err = db.Exec(insertQuery, id.Id)
+	if err != nil {
+		log.Println(err)
+		res.WriteHeader(http.StatusBadRequest)
+	} else {
+		res.WriteHeader(http.StatusOK)
+	}
 	defer db.Close()
 }
 
 func main() {
 	http.HandleFunc("/", GETHandler)
 	http.HandleFunc("/insert", POSTHandler)
+	http.HandleFunc("/delete", POSTRemoveHandler)
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
